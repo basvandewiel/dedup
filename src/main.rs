@@ -1,7 +1,7 @@
 use clap::{App, Arg};
 use rusqlite::Connection;
 use std::fs::File;
-use std::io::{Read, BufRead, BufReader};
+use std::io::{Read, BufRead, BufReader, stdin};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -14,13 +14,12 @@ fn main() {
         .arg(
             Arg::with_name("input")
                 .value_name("FILE")
-                .required(true)
-                .help("The input file containing the paths to the files to process"),
+                .help("The input file containing the paths to the files to process. If not specified, reads from stdin"),
         )
         .get_matches();
 
     // Get the value of the "input" argument
-    let input_file = matches.value_of("input").unwrap();
+    let input_file = matches.value_of("input").unwrap_or("-");
 
     // Open a connection to the database file
     let conn = Arc::new(Mutex::new(
@@ -36,9 +35,14 @@ fn main() {
         )
         .expect("Failed to create table");
 
-    // Read the input file containing the paths to the files to process
-    let file = File::open(input_file).expect("Failed to open input file");
-    let reader = BufReader::new(file);
+    // Read the input file(s) containing the paths to the files to process
+    let reader: Box<dyn BufRead> = if input_file == "-" {
+        Box::new(BufReader::new(stdin()))
+    } else {
+        Box::new(BufReader::new(
+            File::open(input_file).expect("Failed to open input file"),
+        ))
+    };
 
     // Determine the number of worker threads to use
     let num_threads = num_cpus::get();
